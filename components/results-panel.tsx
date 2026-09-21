@@ -378,7 +378,7 @@ export function ResultsPanel({
               affiliateLink={result.affiliateLink}
             />
 
-            {/* Auto-post status / manual publish */}
+            {/* Manual publish to Pinterest */}
             <div className="mt-6 rounded-lg border p-4">
               {result.pinterestPin ? (
                 <div className="flex flex-wrap items-center justify-between gap-3">
@@ -432,7 +432,7 @@ export function ResultsPanel({
               ) : (
                 <p className="text-xs text-muted-foreground">
                   <span className="font-medium text-foreground">
-                    Auto-posting unavailable:
+                    Publishing unavailable:
                   </span>{" "}
                   set <code className="rounded bg-muted px-1">PINTEREST_ACCESS_TOKEN</code>{" "}
                   in your environment to publish pins directly from here

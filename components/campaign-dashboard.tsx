@@ -69,7 +69,6 @@ export function CampaignDashboard() {
   const [progressLabel, setProgressLabel] = React.useState<string | null>(null);
   const [pinterestStatus, setPinterestStatus] =
     React.useState<PinterestStatusResponse | null>(null);
-  const [autoPost, setAutoPost] = React.useState(true);
   const [isPublishing, setIsPublishing] = React.useState(false);
 
   // Check Pinterest connectivity once on mount.
@@ -211,7 +210,7 @@ export function CampaignDashboard() {
       const copyResult =
         copySettled.status === "fulfilled" ? copySettled.value : null;
 
-      let generation: GenerationResult = {
+      const generation: GenerationResult = {
         images: imagesResult?.images ?? [],
         aiBackdropUsed: imagesResult?.aiBackdropUsed ?? false,
         copy: copyResult,
@@ -231,54 +230,6 @@ export function CampaignDashboard() {
           description:
             "One pipeline failed — the successful output is shown below. Retry for the rest.",
         });
-      }
-
-      // Phase 3 — auto-post to Pinterest when connected + enabled.
-      const pinImage = generation.images.find(
-        (img) => img.platform === "pinterest"
-      );
-      if (
-        autoPost &&
-        pinterestConnected &&
-        values.platforms.includes("pinterest") &&
-        pinImage &&
-        copyResult
-      ) {
-        setProgressLabel("Auto-posting pin to Pinterest");
-        try {
-          const published = await postJson<PinterestPublishResponse>(
-            "/api/pinterest/publish",
-            {
-              title: values.productTitle,
-              description: [
-                copyResult.pinterestDescription,
-                copyResult.pinterestHashtags.join(" "),
-              ]
-                .filter(Boolean)
-                .join("\n\n")
-                .slice(0, 800),
-              link: values.affiliateLink,
-              imageUrl: pinImage.url,
-              altText: values.productTitle,
-            }
-          );
-          generation = { ...generation, pinterestPin: published.pin };
-          setResult(generation);
-          toast.success("Pin published to Pinterest! 📌", {
-            description: published.pin.url,
-            action: {
-              label: "View Pin",
-              onClick: () => window.open(published.pin.url, "_blank"),
-            },
-          });
-        } catch (err) {
-          toast.error("Pinterest auto-post failed", {
-            description:
-              err instanceof Error
-                ? `${err.message} — you can retry manually from the Pinterest tab.`
-                : "Retry manually from the Pinterest tab.",
-          });
-        }
       }
     } catch (err) {
       console.error("[generate] fatal:", err);
@@ -528,38 +479,6 @@ export function CampaignDashboard() {
                 </p>
               )}
             </div>
-
-            {/* Pinterest auto-post toggle */}
-            <label
-              className={`flex items-start gap-3 rounded-lg border p-3 ${
-                pinterestConnected
-                  ? "cursor-pointer hover:bg-accent/50"
-                  : "opacity-70"
-              }`}
-            >
-              <Checkbox
-                checked={autoPost && pinterestConnected}
-                disabled={!pinterestConnected || isSubmitting}
-                onCheckedChange={(state) => setAutoPost(state === true)}
-                className="mt-0.5"
-              />
-              <div>
-                <p className="text-sm font-medium leading-tight">
-                  Auto-post to Pinterest after generation
-                </p>
-                <p className="mt-0.5 text-[11px] text-muted-foreground">
-                  {pinterestConnected
-                    ? `Connected — pins publish to ${
-                        pinterestStatus?.boards.find(
-                          (b) => b.id === pinterestStatus.defaultBoardId
-                        )?.name ??
-                        pinterestStatus?.boards[0]?.name ??
-                        "your first board"
-                      }.`
-                    : "Not connected. Set PINTEREST_ACCESS_TOKEN to enable direct publishing."}
-                </p>
-              </div>
-            </label>
 
             <Button
               type="submit"

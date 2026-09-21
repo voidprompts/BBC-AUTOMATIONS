@@ -17,7 +17,7 @@ Production-ready web app that turns a **product image + model image + affiliate 
   - `facebookHashtags[]` / `pinterestHashtags[]`
 - **Results canvas** — tabbed Facebook/Pinterest previews, Copy Text buttons, Download Image buttons, clickable affiliate-link preview.
 - **Live keyword research** (`/api/research-keywords`) — scrapes real-time search demand from **Google Autocomplete**, **Google Trends related queries** (top + rising/breakout), and **DuckDuckGo Suggest**; terms are scored, cross-source corroborated, and injected into the LLM prompt so captions/hashtags target what people search **right now**. The used keywords are shown as a ranked insight panel under the results.
-- **Pinterest auto-posting** (`/api/pinterest/publish` + `/status`) — publishes the generated 1000×1500 creative as a real pin (title, SEO description + hashtags, affiliate link) via the **Pinterest API v5**. Auto-posts right after generation (toggleable) or manually from the Pinterest tab; returns the live pin URL.
+- **Pinterest publishing** (`/api/pinterest/publish` + `/status`) — one-click **manual** publishing of the generated 1000×1500 creative as a real pin (title, SEO description + hashtags, affiliate link) via the **Pinterest API v5** from the Pinterest tab; returns the live pin URL.
 
 ## 🧱 Stack
 
@@ -38,7 +38,7 @@ npm run dev
 | `NVIDIA_API_KEY` | Free at [build.nvidia.com](https://build.nvidia.com/) — format `nvapi-…` |
 | `BLOB_READ_WRITE_TOKEN` | Vercel dashboard → Project → Storage → Blob (free tier) |
 
-### Optional — Pinterest auto-posting
+### Optional — Pinterest publishing
 
 | Variable | Purpose |
 | --- | --- |
