@@ -4,8 +4,10 @@ import { env, MissingEnvError } from "@/lib/env";
 
 export const runtime = "nodejs";
 
-const ALLOWED_CONTENT_TYPES = ["image/png", "image/jpeg"];
-const MAX_SIZE_BYTES = 8 * 1024 * 1024; // 8 MB per upload
+// Accept any image type (PNG, JPEG, WebP, GIF, AVIF, TIFF, SVG, BMP, HEIC…).
+// sharp normalizes formats downstream in the generation pipeline.
+const ALLOWED_CONTENT_TYPES = ["image/*"];
+const MAX_SIZE_BYTES = 12 * 1024 * 1024; // 12 MB per upload
 
 /**
  * Client → cloud uploads via Vercel Blob.

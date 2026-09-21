@@ -56,6 +56,8 @@ export interface CopyGenerationInput {
   primaryKeywords: string;
   affiliateLink: string;
   platforms: string[];
+  /** Live search-demand keywords from the research pipeline. */
+  researchedKeywords?: Array<{ term: string; score: number; rising: boolean }>;
 }
 
 /** Extract the first JSON object from a possibly noisy LLM response. */
@@ -94,12 +96,27 @@ export async function generateMarketingCopy(
 ): Promise<MarketingCopy> {
   const client = nimClient();
 
+  const researched = (input.researchedKeywords ?? []).slice(0, 18);
+  const researchBlock =
+    researched.length > 0
+      ? [
+          "",
+          "LIVE SEARCH-DEMAND DATA (scraped moments ago from Google Autocomplete / Google Trends / DuckDuckGo — ranked by real search interest, highest first):",
+          ...researched.map(
+            (k) =>
+              `- "${k.term}" (demand score ${k.score}${k.rising ? ", 🔥 RISING on Google Trends" : ""})`
+          ),
+          "Weave the highest-scoring and RISING terms naturally into the Pinterest description and derive hashtags from them. Prioritize these over generic tags — they reflect what people are searching for RIGHT NOW.",
+        ]
+      : [];
+
   const userPrompt = [
     `Product title: ${input.productTitle}`,
     `Short description: ${input.shortDescription}`,
     `Primary keywords: ${input.primaryKeywords}`,
     `Affiliate link (use verbatim): ${input.affiliateLink}`,
     `Target platforms: ${input.platforms.join(", ")}`,
+    ...researchBlock,
     "",
     "Generate the JSON object now.",
   ].join("\n");

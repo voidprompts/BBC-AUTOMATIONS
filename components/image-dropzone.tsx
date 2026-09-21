@@ -8,8 +8,7 @@ import { toast } from "sonner";
 import { cn, truncate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
-const ACCEPTED_TYPES = ["image/png", "image/jpeg"];
-const MAX_SIZE_BYTES = 8 * 1024 * 1024;
+const MAX_SIZE_BYTES = 12 * 1024 * 1024;
 
 export interface UploadedBlob {
   url: string;
@@ -49,11 +48,11 @@ export function ImageDropzone({
   }, [localPreview]);
 
   const validate = (file: File): string | null => {
-    if (!ACCEPTED_TYPES.includes(file.type)) {
-      return "Only PNG and JPEG images are accepted.";
+    if (!file.type.startsWith("image/")) {
+      return "Only image files are accepted.";
     }
     if (file.size > MAX_SIZE_BYTES) {
-      return "Image is too large (max 8 MB).";
+      return "Image is too large (max 12 MB).";
     }
     return null;
   };
@@ -202,7 +201,7 @@ export function ImageDropzone({
                 </p>
                 <p className="text-xs text-muted-foreground">{hint}</p>
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                  PNG / JPEG · max 8 MB
+                  Any image format · max 12 MB
                 </p>
               </>
             )}
@@ -211,7 +210,7 @@ export function ImageDropzone({
         <input
           ref={inputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(",")}
+          accept="image/*"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];

@@ -87,6 +87,21 @@ export const generateTextRequestSchema = z.object({
   primaryKeywords: z.string().min(1),
   affiliateLink: z.string().url(),
   platforms: z.array(z.enum(PLATFORMS)).min(1),
+  /**
+   * Live search-demand keywords gathered by /api/research-keywords
+   * (Google Autocomplete / DuckDuckGo / Google Trends). Injected into
+   * the LLM prompt so captions target real, currently-searched terms.
+   */
+  researchedKeywords: z
+    .array(
+      z.object({
+        term: z.string(),
+        score: z.number(),
+        rising: z.boolean().default(false),
+      })
+    )
+    .max(30)
+    .optional(),
 });
 
 export type GenerateTextRequest = z.infer<typeof generateTextRequestSchema>;
@@ -100,6 +115,49 @@ export const marketingCopySchema = z.object({
 });
 
 export type MarketingCopy = z.infer<typeof marketingCopySchema>;
+
+/* ------------------------------------------------------------------ */
+/* /api/research-keywords                                              */
+/* ------------------------------------------------------------------ */
+
+export const keywordSuggestionSchema = z.object({
+  term: z.string(),
+  score: z.number(),
+  sources: z.array(z.string()),
+  rising: z.boolean(),
+});
+
+export type KeywordSuggestionDto = z.infer<typeof keywordSuggestionSchema>;
+
+export const researchKeywordsResponseSchema = z.object({
+  keywords: z.array(keywordSuggestionSchema),
+  activeSources: z.array(z.string()),
+});
+
+export type ResearchKeywordsResponse = z.infer<
+  typeof researchKeywordsResponseSchema
+>;
+
+/* ------------------------------------------------------------------ */
+/* /api/pinterest/*                                                    */
+/* ------------------------------------------------------------------ */
+
+export interface PinterestBoardDto {
+  id: string;
+  name: string;
+  privacy: string;
+}
+
+export interface PinterestStatusResponse {
+  connected: boolean;
+  boards: PinterestBoardDto[];
+  defaultBoardId: string | null;
+  detail?: string;
+}
+
+export interface PinterestPublishResponse {
+  pin: { id: string; url: string };
+}
 
 /* ------------------------------------------------------------------ */
 /* Standard API error envelope                                         */

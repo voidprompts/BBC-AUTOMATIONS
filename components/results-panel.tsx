@@ -10,12 +10,15 @@ import {
   Hash,
   Loader2,
   Pin,
+  Send,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
   PLATFORM_SPECS,
   type GeneratedImage,
+  type KeywordSuggestionDto,
   type MarketingCopy,
   type Platform,
 } from "@/lib/schemas";
@@ -38,12 +41,21 @@ export interface GenerationResult {
   aiBackdropUsed: boolean;
   affiliateLink: string;
   platforms: Platform[];
+  /** Live keywords used to optimize the captions. */
+  researchedKeywords: KeywordSuggestionDto[];
+  /** Set when the pin was auto-published to Pinterest. */
+  pinterestPin: { id: string; url: string } | null;
 }
 
 interface ResultsPanelProps {
   result: GenerationResult | null;
   isGenerating: boolean;
   progressLabel: string | null;
+  /** Whether a Pinterest token is connected server-side. */
+  pinterestConnected: boolean;
+  /** Manual publish trigger (used when auto-post is off or failed). */
+  onPublishPinterest: () => Promise<void>;
+  isPublishing: boolean;
 }
 
 function CopyButton({ text, label }: { text: string; label: string }) {
@@ -225,10 +237,44 @@ function PlatformResult({
   );
 }
 
+function KeywordInsights({ keywords }: { keywords: KeywordSuggestionDto[] }) {
+  if (!keywords.length) return null;
+  return (
+    <div className="mt-6 rounded-lg border bg-muted/30 p-4">
+      <p className="mb-2 flex items-center gap-1.5 text-sm font-semibold">
+        <TrendingUp className="h-4 w-4 text-primary" />
+        Live keyword research used for this campaign
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {keywords.slice(0, 16).map((kw) => (
+          <Badge
+            key={kw.term}
+            variant={kw.rising ? "default" : "secondary"}
+            className="gap-1 font-normal"
+            title={`score ${kw.score} · sources: ${kw.sources.join(", ")}`}
+          >
+            {kw.rising && <TrendingUp className="h-3 w-3" />}
+            {kw.term}
+            <span className="opacity-60">· {kw.score}</span>
+          </Badge>
+        ))}
+      </div>
+      <p className="mt-2 text-[11px] text-muted-foreground">
+        Ranked by real-time demand from Google Autocomplete, Google Trends
+        related queries, and DuckDuckGo Suggest.{" "}
+        <TrendingUp className="inline h-3 w-3" /> = rising on Google Trends.
+      </p>
+    </div>
+  );
+}
+
 export function ResultsPanel({
   result,
   isGenerating,
   progressLabel,
+  pinterestConnected,
+  onPublishPinterest,
+  isPublishing,
 }: ResultsPanelProps) {
   if (isGenerating) {
     return (
@@ -331,8 +377,75 @@ export function ResultsPanel({
               hashtags={result.copy?.pinterestHashtags ?? []}
               affiliateLink={result.affiliateLink}
             />
+
+            {/* Auto-post status / manual publish */}
+            <div className="mt-6 rounded-lg border p-4">
+              {result.pinterestPin ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="flex h-8 w-8 items-center justify-center rounded-full bg-green-100">
+                      <Check className="h-4 w-4 text-green-600" />
+                    </span>
+                    <div>
+                      <p className="text-sm font-medium">
+                        Published to Pinterest
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Pin ID: {result.pinterestPin.id}
+                      </p>
+                    </div>
+                  </div>
+                  <Button asChild size="sm" variant="outline">
+                    <a
+                      href={result.pinterestPin.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      <ExternalLink /> View Pin
+                    </a>
+                  </Button>
+                </div>
+              ) : pinterestConnected ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium">
+                      Post this pin to Pinterest
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Publishes the creative above with its description and
+                      affiliate link via the Pinterest API.
+                    </p>
+                  </div>
+                  <Button
+                    size="sm"
+                    onClick={() => void onPublishPinterest()}
+                    disabled={isPublishing || !imageFor("pinterest")}
+                  >
+                    {isPublishing ? (
+                      <Loader2 className="animate-spin" />
+                    ) : (
+                      <Send />
+                    )}
+                    {isPublishing ? "Publishing…" : "Publish to Pinterest"}
+                  </Button>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  <span className="font-medium text-foreground">
+                    Auto-posting unavailable:
+                  </span>{" "}
+                  set <code className="rounded bg-muted px-1">PINTEREST_ACCESS_TOKEN</code>{" "}
+                  in your environment to publish pins directly from here
+                  (create an app at developers.pinterest.com with{" "}
+                  <code className="rounded bg-muted px-1">pins:write</code>{" "}
+                  scope).
+                </p>
+              )}
+            </div>
           </TabsContent>
         </Tabs>
+
+        <KeywordInsights keywords={result.researchedKeywords} />
       </CardContent>
     </Card>
   );

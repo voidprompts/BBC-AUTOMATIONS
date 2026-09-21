@@ -18,7 +18,10 @@ import {
   type CampaignFormValues,
   type GenerateImagesResponse,
   type MarketingCopy,
+  type PinterestPublishResponse,
+  type PinterestStatusResponse,
   type Platform,
+  type ResearchKeywordsResponse,
 } from "@/lib/schemas";
 import { Button } from "@/components/ui/button";
 import {
@@ -64,6 +67,20 @@ export function CampaignDashboard() {
   const [modelBlob, setModelBlob] = React.useState<UploadedBlob | null>(null);
   const [result, setResult] = React.useState<GenerationResult | null>(null);
   const [progressLabel, setProgressLabel] = React.useState<string | null>(null);
+  const [pinterestStatus, setPinterestStatus] =
+    React.useState<PinterestStatusResponse | null>(null);
+  const [autoPost, setAutoPost] = React.useState(true);
+  const [isPublishing, setIsPublishing] = React.useState(false);
+
+  // Check Pinterest connectivity once on mount.
+  React.useEffect(() => {
+    fetch("/api/pinterest/status")
+      .then((r) => r.json())
+      .then((data: PinterestStatusResponse) => setPinterestStatus(data))
+      .catch(() => setPinterestStatus(null));
+  }, []);
+
+  const pinterestConnected = pinterestStatus?.connected ?? false;
 
   const {
     register,
@@ -100,9 +117,48 @@ export function CampaignDashboard() {
     };
 
     try {
+      // Phase 1 — live keyword research (Google Autocomplete / Trends /
+      // DuckDuckGo). Best-effort: an empty result never blocks generation.
+      setProgressLabel("Researching live keyword demand (Google Trends)");
+      const seeds = [
+        ...values.primaryKeywords
+          .split(/[,;]/)
+          .map((s) => s.trim())
+          .filter(Boolean),
+        values.productTitle,
+      ].slice(0, 5);
+
+      let research: ResearchKeywordsResponse = {
+        keywords: [],
+        activeSources: [],
+      };
+      try {
+        research = await postJson<ResearchKeywordsResponse>(
+          "/api/research-keywords",
+          { seeds }
+        );
+        if (research.keywords.length > 0) {
+          toast.success(
+            `Found ${research.keywords.length} trending keywords`,
+            {
+              description: `Sources: ${research.activeSources.join(", ")} — captions will target these.`,
+            }
+          );
+        } else {
+          toast.info("Keyword research returned no extra terms", {
+            description: "Continuing with your primary keywords only.",
+          });
+        }
+      } catch (err) {
+        toast.warning("Keyword research unavailable", {
+          description:
+            err instanceof Error ? err.message : "Continuing without it.",
+        });
+      }
+
+      // Phase 2 — fire both generation pipelines in parallel.
       setProgressLabel("Merging images with NVIDIA SDXL + sharp");
 
-      // Fire both pipelines in parallel — they are independent.
       const imagesPromise = postJson<GenerateImagesResponse>(
         "/api/generate-images",
         {
@@ -114,6 +170,11 @@ export function CampaignDashboard() {
       const copyPromise = postJson<MarketingCopy>("/api/generate-text", {
         ...sharedInput,
         affiliateLink: values.affiliateLink,
+        researchedKeywords: research.keywords.map((k) => ({
+          term: k.term,
+          score: k.score,
+          rising: k.rising,
+        })),
       });
 
       copyPromise
@@ -150,13 +211,16 @@ export function CampaignDashboard() {
       const copyResult =
         copySettled.status === "fulfilled" ? copySettled.value : null;
 
-      setResult({
+      let generation: GenerationResult = {
         images: imagesResult?.images ?? [],
         aiBackdropUsed: imagesResult?.aiBackdropUsed ?? false,
         copy: copyResult,
         affiliateLink: values.affiliateLink,
         platforms: values.platforms,
-      });
+        researchedKeywords: research.keywords,
+        pinterestPin: null,
+      };
+      setResult(generation);
 
       if (imagesResult && copyResult) {
         toast.success("Marketing assets generated!", {
@@ -168,6 +232,54 @@ export function CampaignDashboard() {
             "One pipeline failed — the successful output is shown below. Retry for the rest.",
         });
       }
+
+      // Phase 3 — auto-post to Pinterest when connected + enabled.
+      const pinImage = generation.images.find(
+        (img) => img.platform === "pinterest"
+      );
+      if (
+        autoPost &&
+        pinterestConnected &&
+        values.platforms.includes("pinterest") &&
+        pinImage &&
+        copyResult
+      ) {
+        setProgressLabel("Auto-posting pin to Pinterest");
+        try {
+          const published = await postJson<PinterestPublishResponse>(
+            "/api/pinterest/publish",
+            {
+              title: values.productTitle,
+              description: [
+                copyResult.pinterestDescription,
+                copyResult.pinterestHashtags.join(" "),
+              ]
+                .filter(Boolean)
+                .join("\n\n")
+                .slice(0, 800),
+              link: values.affiliateLink,
+              imageUrl: pinImage.url,
+              altText: values.productTitle,
+            }
+          );
+          generation = { ...generation, pinterestPin: published.pin };
+          setResult(generation);
+          toast.success("Pin published to Pinterest! 📌", {
+            description: published.pin.url,
+            action: {
+              label: "View Pin",
+              onClick: () => window.open(published.pin.url, "_blank"),
+            },
+          });
+        } catch (err) {
+          toast.error("Pinterest auto-post failed", {
+            description:
+              err instanceof Error
+                ? `${err.message} — you can retry manually from the Pinterest tab.`
+                : "Retry manually from the Pinterest tab.",
+          });
+        }
+      }
     } catch (err) {
       console.error("[generate] fatal:", err);
       toast.error("Generation failed", {
@@ -178,6 +290,50 @@ export function CampaignDashboard() {
       });
     } finally {
       setProgressLabel(null);
+    }
+  };
+
+  /** Manual publish from the Pinterest tab (auto-post off or failed). */
+  const publishPinterest = async () => {
+    if (!result) return;
+    const pinImage = result.images.find((img) => img.platform === "pinterest");
+    if (!pinImage || !result.copy) {
+      toast.error("Nothing to publish", {
+        description: "Generate a Pinterest creative and caption first.",
+      });
+      return;
+    }
+    setIsPublishing(true);
+    try {
+      const published = await postJson<PinterestPublishResponse>(
+        "/api/pinterest/publish",
+        {
+          title: result.copy.pinterestDescription.slice(0, 100),
+          description: [
+            result.copy.pinterestDescription,
+            result.copy.pinterestHashtags.join(" "),
+          ]
+            .filter(Boolean)
+            .join("\n\n")
+            .slice(0, 800),
+          link: result.affiliateLink,
+          imageUrl: pinImage.url,
+        }
+      );
+      setResult({ ...result, pinterestPin: published.pin });
+      toast.success("Pin published to Pinterest! 📌", {
+        description: published.pin.url,
+        action: {
+          label: "View Pin",
+          onClick: () => window.open(published.pin.url, "_blank"),
+        },
+      });
+    } catch (err) {
+      toast.error("Pinterest publish failed", {
+        description: err instanceof Error ? err.message : "Try again.",
+      });
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -373,6 +529,38 @@ export function CampaignDashboard() {
               )}
             </div>
 
+            {/* Pinterest auto-post toggle */}
+            <label
+              className={`flex items-start gap-3 rounded-lg border p-3 ${
+                pinterestConnected
+                  ? "cursor-pointer hover:bg-accent/50"
+                  : "opacity-70"
+              }`}
+            >
+              <Checkbox
+                checked={autoPost && pinterestConnected}
+                disabled={!pinterestConnected || isSubmitting}
+                onCheckedChange={(state) => setAutoPost(state === true)}
+                className="mt-0.5"
+              />
+              <div>
+                <p className="text-sm font-medium leading-tight">
+                  Auto-post to Pinterest after generation
+                </p>
+                <p className="mt-0.5 text-[11px] text-muted-foreground">
+                  {pinterestConnected
+                    ? `Connected — pins publish to ${
+                        pinterestStatus?.boards.find(
+                          (b) => b.id === pinterestStatus.defaultBoardId
+                        )?.name ??
+                        pinterestStatus?.boards[0]?.name ??
+                        "your first board"
+                      }.`
+                    : "Not connected. Set PINTEREST_ACCESS_TOKEN to enable direct publishing."}
+                </p>
+              </div>
+            </label>
+
             <Button
               type="submit"
               size="lg"
@@ -401,6 +589,9 @@ export function CampaignDashboard() {
           result={result}
           isGenerating={isSubmitting}
           progressLabel={progressLabel}
+          pinterestConnected={pinterestConnected}
+          onPublishPinterest={publishPinterest}
+          isPublishing={isPublishing}
         />
       </div>
     </div>

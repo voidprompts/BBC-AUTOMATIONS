@@ -9,6 +9,7 @@ const nextConfig = {
     ],
   },
   // Allow the sandboxed live-preview origin to reach the dev server.
+  allowedDevOrigins: ["*.e2b.app"],
   experimental: {
     serverActions: {
       bodySizeLimit: "10mb",
