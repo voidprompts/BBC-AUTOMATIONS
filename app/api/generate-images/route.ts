@@ -15,7 +15,7 @@ import {
 import { generateAiBackdrop } from "@/lib/nvidia";
 
 export const runtime = "nodejs";
-export const maxDuration = 300; // long-running: AI gen + sharp + uploads
+export const maxDuration = 60; // long-running: AI gen + sharp + uploads
 
 /**
  * AI image pipeline:
