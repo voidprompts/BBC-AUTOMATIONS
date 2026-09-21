@@ -4,7 +4,7 @@ import { generateTextRequestSchema } from "@/lib/schemas";
 import { generateMarketingCopy, NvidiaApiError } from "@/lib/nvidia";
 
 export const runtime = "nodejs";
-export const maxDuration = 120;
+export const maxDuration = 60;
 
 /**
  * SEO caption pipeline — queries the NVIDIA NIM chat-completions
